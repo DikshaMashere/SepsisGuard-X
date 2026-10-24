@@ -1,11 +1,16 @@
-﻿from pathlib import Path
+from pathlib import Path
 
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse
 
 from app.schemas.prediction import PredictionRequest
 from app.schemas.response import PredictionResponse
+from app.schemas.trend_prediction import TrendPredictionRequest
 from app.services.model_service import load_model, predict_sepsis_risk
+from app.services.explainability_service import explain_sepsis_prediction
+from app.services.trend_service import analyze_patient_trend
+from app.services.live_uncertainty_service import estimate_live_uncertainty
+from app.services.temporal_model_service import predict_temporal_risk
 
 
 app = FastAPI(
@@ -72,3 +77,84 @@ def predict(request: PredictionRequest):
         ),
         disclaimer=DISCLAIMER,
     )
+
+
+@app.post("/api/predict-temporal")
+def predict_temporal(request: TrendPredictionRequest):
+    try:
+        observations = [
+            observation.model_dump()
+            for observation in request.observations
+        ]
+        result = predict_temporal_risk(observations)
+        result["disclaimer"] = DISCLAIMER
+        return result
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(
+            status_code=500,
+            detail="Temporal prediction failed. Check the application logs.",
+        ) from exc
+
+
+@app.post("/api/explain")
+def explain_prediction(request: PredictionRequest):
+    try:
+        result = explain_sepsis_prediction(request.model_dump())
+        result["model_name"] = "Calibrated Logistic Regression"
+        result["disclaimer"] = DISCLAIMER
+        return result
+
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(
+            status_code=500,
+            detail="Explanation failed. Check the application logs.",
+        ) from exc
+
+
+@app.post("/api/predict-trend")
+def predict_trend(request: TrendPredictionRequest):
+    try:
+        observations = [
+            observation.model_dump()
+            for observation in request.observations
+        ]
+        result = analyze_patient_trend(observations)
+        result["disclaimer"] = DISCLAIMER
+        return result
+
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(
+            status_code=500,
+            detail="Trend analysis failed. Check the application logs.",
+        ) from exc
+
+
+@app.post("/api/uncertainty")
+def predict_uncertainty(request: PredictionRequest):
+    try:
+        result = estimate_live_uncertainty(request.model_dump())
+        result["model_name"] = "20 Unweighted Bootstrap Models"
+        result["disclaimer"] = DISCLAIMER
+        return result
+
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(
+            status_code=500,
+            detail="Uncertainty estimation failed. Check the application logs.",
+        ) from exc

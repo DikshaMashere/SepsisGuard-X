@@ -1,4 +1,5 @@
-﻿<!DOCTYPE html>
+﻿
+<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -49,9 +50,17 @@
             font-weight: bold;
             cursor: pointer;
         }
-        #result { display: none; line-height: 1.6; overflow-wrap: anywhere; }
+        button:disabled { opacity: 0.6; cursor: wait; }
+        #result, #explanation { display: none; line-height: 1.6; overflow-wrap: anywhere; }
         #probability { font-size: 30px; font-weight: bold; color: #1d4ed8; }
         .error { color: #b91c1c; }
+        .feature-row {
+            border-bottom: 1px solid #e2e8f0;
+            padding: 10px 0;
+        }
+        .positive { color: #b91c1c; }
+        .negative { color: #047857; }
+        .muted { color: #64748b; font-size: 0.92rem; }
         @media(max-width: 600px) { .grid { grid-template-columns: 1fr; } }
     </style>
 </head>
@@ -88,49 +97,177 @@
         </form>
     </section>
 
+    <section id="temporalSection">
+        <h2>6-Hour Temporal Prediction</h2>
+        <p>Enter seven consecutive hourly observations. All values below are synthetic examples for software testing.</p>
+        <p class="warning">Research prototype only. This output is not clinically validated and must not guide patient-care decisions.</p>
+        <div id="temporalInputs"></div>
+        <button id="temporalButton" type="button">Run 6-Hour Temporal Prediction</button>
+        <div id="temporalResult" aria-live="polite"></div>
+    </section>
     <section id="result" aria-live="polite">
         <h2>Model Response</h2>
         <div id="resultContent"></div>
+        <button id="explainButton" type="button" disabled>Explain Prediction with SHAP</button>
+    </section>
+
+    <section id="explanation" aria-live="polite">
+        <h2>Prediction Explanation</h2>
+        <p class="muted">
+            SHAP contributions describe how features influence this model's
+            output relative to its background data. They do not establish causation.
+        </p>
+        <div id="explanationContent"></div>
     </section>
 
     <script>
-        const form = document.getElementById("predictionForm");
-        const button = document.getElementById("predictButton");
-        const result = document.getElementById("result");
-        const content = document.getElementById("resultContent");
+        const temporalInputs = document.getElementById("temporalInputs");
+        const temporalButton = document.getElementById("temporalButton");
+        const temporalResult = document.getElementById("temporalResult");
 
-        form.addEventListener("submit", async (event) => {
-            event.preventDefault();
+        const temporalFields = [
+            ["HR", 90], ["O2Sat", 97], ["SBP", 120], ["MAP", 80],
+            ["Resp", 18], ["Age", 45], ["Gender", 1],
+            ["HospAdmTime", -10], ["ICULOS", 1]
+        ];
 
-            const names = [
-                "Hour", "HR", "O2Sat", "SBP", "MAP",
-                "Resp", "Age", "Gender", "HospAdmTime", "ICULOS"
-            ];
-            const payload = {};
-            for (const name of names) {
-                payload[name] = Number(document.getElementById(name).value);
+        for (let hour = 0; hour < 7; hour++) {
+            const group = document.createElement("details");
+            group.open = hour === 6;
+            group.style.margin = "12px 0";
+            const heading = document.createElement("summary");
+            heading.textContent = "Observation at hour " + hour;
+            group.appendChild(heading);
+
+            const grid = document.createElement("div");
+            grid.className = "grid";
+
+            for (const [name, initial] of temporalFields) {
+                const wrapper = document.createElement("div");
+                const label = document.createElement("label");
+                label.textContent = name + " (hour " + hour + ")";
+                const input = document.createElement("input");
+                input.type = "number";
+                input.step = "any";
+                input.required = true;
+                input.dataset.hour = hour;
+                input.dataset.field = name;
+                input.value = name === "ICULOS" ? initial + hour : initial;
+                label.htmlFor = "temporal_" + hour + "_" + name;
+                input.id = label.htmlFor;
+                wrapper.append(label, input);
+                grid.appendChild(wrapper);
             }
 
-            result.style.display = "block";
-            content.textContent = "Requesting prediction...";
-            button.disabled = true;
+            group.appendChild(grid);
+            temporalInputs.appendChild(group);
+        }
+
+        temporalButton.addEventListener("click", async () => {
+            temporalButton.disabled = true;
+            temporalResult.textContent = "Calculating temporal prediction...";
 
             try {
-                const response = await fetch("/api/predict", {
+                const observations = [];
+
+                for (let hour = 0; hour < 7; hour++) {
+                    const observation = { Hour: hour };
+                    for (const input of temporalInputs.querySelectorAll(
+                        'input[data-hour="' + hour + '"]'
+                    )) {
+                        observation[input.dataset.field] = Number(input.value);
+                        if (input.value.trim() === "") {
+                            throw new Error("Please fill every input field.");
+                        }
+                    }
+                    observations.push(observation);
+                }
+
+                const response = await fetch("/api/predict-temporal", {
                     method: "POST",
-                    headers: {"Content-Type": "application/json"},
-                    body: JSON.stringify(payload)
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ observations })
                 });
                 const data = await response.json();
 
                 if (!response.ok) {
                     throw new Error(
                         typeof data.detail === "string"
-                            ? data.detail
-                            : JSON.stringify(data.detail || data)
+                            ? data.detail : JSON.stringify(data.detail)
                     );
                 }
 
+                temporalResult.replaceChildren();
+                const probability = document.createElement("h3");
+                probability.textContent =
+                    "Model output: " + (data.probability * 100).toFixed(2) + "%";
+                const horizon = document.createElement("p");
+                horizon.textContent =
+                    "Prediction horizon: " + data.prediction_horizon_hours + " hours";
+                const note = document.createElement("p");
+                note.className = "warning";
+                note.textContent = data.disclaimer;
+                temporalResult.append(probability, horizon, note);
+            } catch (error) {
+                temporalResult.textContent = "Request failed: " + error.message;
+                temporalResult.className = "error";
+            } finally {
+                temporalButton.disabled = false;
+            }
+        });
+        const form = document.getElementById("predictionForm");
+        const predictButton = document.getElementById("predictButton");
+        const explainButton = document.getElementById("explainButton");
+        const result = document.getElementById("result");
+        const content = document.getElementById("resultContent");
+        const explanation = document.getElementById("explanation");
+        const explanationContent = document.getElementById("explanationContent");
+
+        const names = [
+            "Hour", "HR", "O2Sat", "SBP", "MAP",
+            "Resp", "Age", "Gender", "HospAdmTime", "ICULOS"
+        ];
+
+        let latestPayload = null;
+
+        function readPayload() {
+            const payload = {};
+            for (const name of names) {
+                payload[name] = Number(document.getElementById(name).value);
+            }
+            return payload;
+        }
+
+        async function postJSON(url, payload) {
+            const response = await fetch(url, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(payload)
+            });
+
+            const data = await response.json();
+
+            if (!response.ok) {
+                const detail = typeof data.detail === "string"
+                    ? data.detail
+                    : JSON.stringify(data.detail || data);
+                throw new Error(detail);
+            }
+            return data;
+        }
+
+        form.addEventListener("submit", async (event) => {
+            event.preventDefault();
+
+            latestPayload = readPayload();
+            result.style.display = "block";
+            explanation.style.display = "none";
+            content.textContent = "Requesting prediction...";
+            predictButton.disabled = true;
+            explainButton.disabled = true;
+
+            try {
+                const data = await postJSON("/api/predict", latestPayload);
                 content.replaceChildren();
 
                 const probability = document.createElement("div");
@@ -138,8 +275,8 @@
                 probability.textContent =
                     (data.probability * 100).toFixed(2) + "%";
 
-                const explanation = document.createElement("p");
-                explanation.textContent =
+                const note = document.createElement("p");
+                note.textContent =
                     "Returned model probability; not a clinically validated risk estimate.";
 
                 const model = document.createElement("p");
@@ -159,9 +296,10 @@
                 disclaimer.textContent = data.disclaimer;
 
                 content.append(
-                    probability, explanation, model,
-                    threshold, comparison, disclaimer
+                    probability, note, model, threshold, comparison, disclaimer
                 );
+
+                explainButton.disabled = false;
             } catch (error) {
                 content.replaceChildren();
                 const message = document.createElement("p");
@@ -169,9 +307,93 @@
                 message.textContent = "Request failed: " + error.message;
                 content.appendChild(message);
             } finally {
-                button.disabled = false;
+                predictButton.disabled = false;
             }
+        });
+
+        explainButton.addEventListener("click", async () => {
+            if (!latestPayload) return;
+
+            explanation.style.display = "block";
+            explanationContent.textContent = "Calculating SHAP contributions...";
+            explainButton.disabled = true;
+
+            try {
+                const data = await postJSON("/api/explain", latestPayload);
+                explanationContent.replaceChildren();
+
+                const base = document.createElement("p");
+                base.textContent =
+                    "SHAP base value: " + Number(data.base_value).toFixed(6);
+                explanationContent.appendChild(base);
+
+                const probability = document.createElement("p");
+                probability.textContent =
+                    "Model probability: " +
+                    (Number(data.probability) * 100).toFixed(2) + "%";
+                explanationContent.appendChild(probability);
+
+                const heading = document.createElement("h3");
+                heading.textContent = "Feature contributions (largest first)";
+                explanationContent.appendChild(heading);
+
+                const list = document.createElement("div");
+
+                for (const item of data.feature_contributions) {
+                    const row = document.createElement("div");
+                    row.className = "feature-row";
+
+                    const name = document.createElement("strong");
+                    name.textContent = item.feature;
+
+                    const value = document.createElement("span");
+                    value.textContent =
+                        " — input value: " + Number(item.value).toFixed(4);
+
+                    const contribution = document.createElement("div");
+                    const amount = Number(item.contribution);
+                    contribution.className = amount >= 0 ? "positive" : "negative";
+                    contribution.textContent =
+                        "SHAP contribution: " +
+                        (amount >= 0 ? "+" : "") + amount.toFixed(6) +
+                        (amount >= 0
+                            ? " (pushes model output upward)"
+                            : " (pushes model output downward)");
+
+                    row.append(name, value, contribution);
+                    list.appendChild(row);
+                }
+
+                explanationContent.appendChild(list);
+
+                const method = document.createElement("p");
+                method.className = "muted";
+                method.textContent = "Method: " + data.explanation_method;
+                explanationContent.appendChild(method);
+
+                const warning = document.createElement("p");
+                warning.className = "warning";
+                warning.textContent = data.warning + " " + data.disclaimer;
+                explanationContent.appendChild(warning);
+            } catch (error) {
+                explanationContent.replaceChildren();
+                const message = document.createElement("p");
+                message.className = "error";
+                message.textContent =
+                    "Explanation failed: " + error.message;
+                explanationContent.appendChild(message);
+            } finally {
+                explainButton.disabled = false;
+            }
+        });
+
+        form.addEventListener("input", () => {
+            explainButton.disabled = true;
+            explanation.style.display = "none";
         });
     </script>
 </body>
 </html>
+
+
+

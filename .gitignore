@@ -47,3 +47,13 @@ data/processed/*.pickle
 
 # Local backup files
 app/main_backup.py
+
+# Generated temporal datasets and model artifacts
+data/processed/temporal/
+data/processed/temporal_model/
+data/processed/bootstrap_models/
+data/processed/bootstrap_models_unweighted/
+
+# Local backups
+*.backup.py
+*.backup.html
