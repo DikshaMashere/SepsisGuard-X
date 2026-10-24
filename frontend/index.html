@@ -1,0 +1,177 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SepsisGuard-X</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background: #f1f5f9;
+            color: #1e293b;
+            max-width: 900px;
+            margin: 35px auto;
+            padding: 20px;
+        }
+        header, section {
+            background: white;
+            padding: 24px;
+            border-radius: 12px;
+            margin-bottom: 20px;
+        }
+        header { background: #10233f; color: white; }
+        .warning {
+            background: #fff7e6;
+            padding: 14px;
+            border-left: 4px solid #e6a23c;
+            line-height: 1.5;
+        }
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 16px;
+        }
+        label { display: block; margin-bottom: 6px; font-weight: bold; }
+        input {
+            width: 100%;
+            box-sizing: border-box;
+            padding: 10px;
+            border: 1px solid #cbd5e1;
+            border-radius: 6px;
+        }
+        button {
+            margin-top: 22px;
+            padding: 13px 20px;
+            border: 0;
+            border-radius: 7px;
+            background: #2563eb;
+            color: white;
+            font-weight: bold;
+            cursor: pointer;
+        }
+        #result { display: none; line-height: 1.6; overflow-wrap: anywhere; }
+        #probability { font-size: 30px; font-weight: bold; color: #1d4ed8; }
+        .error { color: #b91c1c; }
+        @media(max-width: 600px) { .grid { grid-template-columns: 1fr; } }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>SepsisGuard-X</h1>
+        <p>AI Sepsis Risk Prediction — Research Prototype</p>
+    </header>
+
+    <p class="warning">
+        <strong>Research use only.</strong> This is not a clinical diagnostic
+        tool. Do not use its output to make patient-care decisions.
+        The displayed probability is not a clinically validated risk estimate.
+    </p>
+
+    <section>
+        <h2>Enter Model Features</h2>
+        <p>Pre-filled values are synthetic examples for software testing.</p>
+
+        <form id="predictionForm">
+            <div class="grid">
+                <div><label for="Hour">Hour</label><input id="Hour" type="number" min="0" step="any" value="5" required></div>
+                <div><label for="HR">Heart Rate (HR)</label><input id="HR" type="number" min="0.01" max="300" step="any" value="90" required></div>
+                <div><label for="O2Sat">Oxygen Saturation (O2Sat)</label><input id="O2Sat" type="number" min="0.01" max="100" step="any" value="97" required></div>
+                <div><label for="SBP">Systolic Blood Pressure (SBP)</label><input id="SBP" type="number" min="0.01" max="300" step="any" value="120" required></div>
+                <div><label for="MAP">Mean Arterial Pressure (MAP)</label><input id="MAP" type="number" min="0.01" max="250" step="any" value="85" required></div>
+                <div><label for="Resp">Respiratory Rate (Resp)</label><input id="Resp" type="number" min="0.01" max="100" step="any" value="18" required></div>
+                <div><label for="Age">Age</label><input id="Age" type="number" min="0" max="120" step="any" value="55" required></div>
+                <div><label for="Gender">Gender (dataset encoding: 0 or 1)</label><input id="Gender" type="number" min="0" max="1" step="1" value="1" required></div>
+                <div><label for="HospAdmTime">Hospital Admission Time (HospAdmTime)</label><input id="HospAdmTime" type="number" step="any" value="-10" required></div>
+                <div><label for="ICULOS">ICU Length of Stay (ICULOS)</label><input id="ICULOS" type="number" min="0" step="any" value="5" required></div>
+            </div>
+            <button id="predictButton" type="submit">Run Research Prediction</button>
+        </form>
+    </section>
+
+    <section id="result" aria-live="polite">
+        <h2>Model Response</h2>
+        <div id="resultContent"></div>
+    </section>
+
+    <script>
+        const form = document.getElementById("predictionForm");
+        const button = document.getElementById("predictButton");
+        const result = document.getElementById("result");
+        const content = document.getElementById("resultContent");
+
+        form.addEventListener("submit", async (event) => {
+            event.preventDefault();
+
+            const names = [
+                "Hour", "HR", "O2Sat", "SBP", "MAP",
+                "Resp", "Age", "Gender", "HospAdmTime", "ICULOS"
+            ];
+            const payload = {};
+            for (const name of names) {
+                payload[name] = Number(document.getElementById(name).value);
+            }
+
+            result.style.display = "block";
+            content.textContent = "Requesting prediction...";
+            button.disabled = true;
+
+            try {
+                const response = await fetch("/api/predict", {
+                    method: "POST",
+                    headers: {"Content-Type": "application/json"},
+                    body: JSON.stringify(payload)
+                });
+                const data = await response.json();
+
+                if (!response.ok) {
+                    throw new Error(
+                        typeof data.detail === "string"
+                            ? data.detail
+                            : JSON.stringify(data.detail || data)
+                    );
+                }
+
+                content.replaceChildren();
+
+                const probability = document.createElement("div");
+                probability.id = "probability";
+                probability.textContent =
+                    (data.probability * 100).toFixed(2) + "%";
+
+                const explanation = document.createElement("p");
+                explanation.textContent =
+                    "Returned model probability; not a clinically validated risk estimate.";
+
+                const model = document.createElement("p");
+                model.textContent = "Model: " + data.model_name;
+
+                const threshold = document.createElement("p");
+                threshold.textContent =
+                    "Reference threshold: " +
+                    (data.threshold * 100).toFixed(1) + "%";
+
+                const comparison = document.createElement("p");
+                comparison.textContent =
+                    "Threshold comparison: " + data.threshold_result;
+
+                const disclaimer = document.createElement("p");
+                disclaimer.className = "warning";
+                disclaimer.textContent = data.disclaimer;
+
+                content.append(
+                    probability, explanation, model,
+                    threshold, comparison, disclaimer
+                );
+            } catch (error) {
+                content.replaceChildren();
+                const message = document.createElement("p");
+                message.className = "error";
+                message.textContent = "Request failed: " + error.message;
+                content.appendChild(message);
+            } finally {
+                button.disabled = false;
+            }
+        });
+    </script>
+</body>
+</html>

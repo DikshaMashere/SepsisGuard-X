@@ -1,0 +1,49 @@
+﻿# Python
+__pycache__/
+*.py[cod]
+*.pyd
+.pytest_cache/
+*.egg-info/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Environment variables and secrets
+.env
+.env.*
+!.env.example
+
+# Jupyter
+.ipynb_checkpoints/
+
+# IDE
+.vscode/
+.idea/
+
+# Operating system
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Local data and generated model artifacts
+data/raw/
+data/interim/
+data/processed/*.joblib
+data/processed/*.pkl
+data/processed/*.pickle
+
+# Research datasets and generated tabular artifacts
+data/Dataset.csv
+data/processed/*.csv
+
+# Trained model artifacts
+data/processed/*.joblib
+data/processed/*.pkl
+data/processed/*.pickle
+
+# Local backup files
+app/main_backup.py
