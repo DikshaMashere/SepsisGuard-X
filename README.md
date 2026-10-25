@@ -213,3 +213,11 @@ Never commit private, sensitive, or identifiable patient information.
 No open-source license has been added yet.
 
 
+
+## Reproducing Baseline Test Evaluation
+
+The script requires the local files `data/processed/logistic_regression_calibrated.joblib` and `data/processed/test.csv`. These files may not be available in a fresh clone.
+
+Run `python final_test_evaluation.py` from the repository root after obtaining the required files and installing dependencies. The script writes `data/processed/final_test_hourly_metrics.csv` and `data/processed/final_test_patient_metrics.csv`.
+
+These are retrospective research metrics, not evidence of clinical validation.
