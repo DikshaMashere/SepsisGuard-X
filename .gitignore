@@ -63,3 +63,6 @@ data/processed/bootstrap_models_unweighted/
 !data/processed/temporal_model/temporal_logistic_regression_corrected.joblib
 !data/processed/bootstrap_models_unweighted/
 !data/processed/bootstrap_models_unweighted/*.joblib
+
+# Small SHAP background dataset required at runtime
+!data/processed/shap_background.csv

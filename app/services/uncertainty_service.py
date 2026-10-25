@@ -1,66 +1,53 @@
-
+﻿import json
 from pathlib import Path
 
-import pandas as pd
-
-
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
-UNCERTAINTY_RESULTS_PATH = (
+UNCERTAINTY_SUMMARY_PATH = (
     PROJECT_ROOT
     / "data"
     / "processed"
-    / "saved_bootstrap_validation_results_unweighted.csv"
+    / "validation_uncertainty_summary.json"
 )
 
 
 def load_validation_uncertainty_summary() -> dict:
     """
-    Summarize previously computed validation-set uncertainty.
-    This is research analysis, not live-patient uncertainty.
+    Load aggregate statistics from previously computed held-out
+    validation uncertainty analysis. This is research analysis,
+    not live-patient uncertainty.
     """
-    if not UNCERTAINTY_RESULTS_PATH.is_file():
+    if not UNCERTAINTY_SUMMARY_PATH.is_file():
         raise FileNotFoundError(
-            f"Validation uncertainty results not found: "
-            f"{UNCERTAINTY_RESULTS_PATH}"
+            f"Validation uncertainty summary not found: "
+            f"{UNCERTAINTY_SUMMARY_PATH}"
         )
 
-    results = pd.read_csv(UNCERTAINTY_RESULTS_PATH)
+    with UNCERTAINTY_SUMMARY_PATH.open("r", encoding="utf-8-sig") as file:
+        summary = json.load(file)
 
-    required_columns = {
-        "Patient_ID",
-        "SepsisLabel",
-        "MeanProbability",
-        "StdProbability",
-        "LowerPercentile",
-        "UpperPercentile",
+    required_fields = {
+        "record_count",
+        "patient_count",
+        "mean_prediction_std",
+        "median_prediction_std",
+        "mean_interval_width",
     }
 
-    missing = required_columns - set(results.columns)
+    missing = required_fields - set(summary)
     if missing:
         raise ValueError(
-            f"Uncertainty results are missing columns: {sorted(missing)}"
+            f"Uncertainty summary is missing fields: {sorted(missing)}"
         )
-
-    uncertainty = results["StdProbability"].dropna()
-
-    if uncertainty.empty:
-        raise ValueError("No valid uncertainty values were found.")
 
     return {
         "source": "held-out validation analysis",
-        "record_count": int(len(results)),
-        "patient_count": int(results["Patient_ID"].nunique()),
-        "mean_prediction_std": float(uncertainty.mean()),
-        "median_prediction_std": float(uncertainty.median()),
-        "mean_interval_width": float(
-            (
-                results["UpperPercentile"]
-                - results["LowerPercentile"]
-            ).mean()
-        ),
+        "record_count": int(summary["record_count"]),
+        "patient_count": int(summary["patient_count"]),
+        "mean_prediction_std": float(summary["mean_prediction_std"]),
+        "median_prediction_std": float(summary["median_prediction_std"]),
+        "mean_interval_width": float(summary["mean_interval_width"]),
         "warning": (
             "Historical validation analysis only. "
             "These values are not uncertainty estimates for a new prediction."
         ),
     }
-

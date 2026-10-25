@@ -1,0 +1,7 @@
+﻿{
+  "record_count": 87224,
+  "patient_count": 2249,
+  "mean_prediction_std": 0.002599592920831017,
+  "median_prediction_std": 0.0016857745276421502,
+  "mean_interval_width": 0.0087214732448692
+}
