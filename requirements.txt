@@ -7,3 +7,5 @@ fastapi
 uvicorn[standard]
 pytest
 httpx
+
+shap==0.54.1
