@@ -57,3 +57,9 @@ data/processed/bootstrap_models_unweighted/
 # Local backups
 *.backup.py
 *.backup.html
+# Required runtime model artifacts for the application
+!data/processed/logistic_regression_calibrated.joblib
+!data/processed/temporal_model/
+!data/processed/temporal_model/temporal_logistic_regression_corrected.joblib
+!data/processed/bootstrap_models_unweighted/
+!data/processed/bootstrap_models_unweighted/*.joblib
